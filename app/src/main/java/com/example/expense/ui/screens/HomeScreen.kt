@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
@@ -20,15 +22,21 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.expense.data.model.Expense
 import com.example.expense.viewmodel.ExpenseViewModel
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -50,11 +59,16 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showDatePicker by remember { mutableStateOf(false) }
+    var expenseToDelete by remember { mutableStateOf<Expense?>(null) }
+    
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     val formatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
     val selectedDate = LocalDate.parse(uiState.selectedDate, DateTimeFormatter.ISO_LOCAL_DATE)
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = onAddExpenseClick) {
                 Icon(Icons.Default.Add, contentDescription = "Add expense")
@@ -112,12 +126,49 @@ fun HomeScreen(
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(uiState.expenses) { expense ->
-                        ExpenseListItem(expense = expense)
+                    items(uiState.expenses, key = { it.id }) { expense ->
+                        ExpenseListItem(
+                            expense = expense,
+                            onDeleteClick = { expenseToDelete = expense }
+                        )
                     }
                 }
             }
         }
+    }
+
+    if (expenseToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { expenseToDelete = null },
+            title = { Text("Delete Expense") },
+            text = { Text("Are you sure you want to delete this expense?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        expenseToDelete?.let { expense ->
+                            viewModel.deleteExpense(expense)
+                            scope.launch {
+                                val result = snackbarHostState.showSnackbar(
+                                    message = "Expense deleted",
+                                    actionLabel = "Undo"
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    viewModel.restoreLastDeletedExpense()
+                                }
+                            }
+                        }
+                        expenseToDelete = null
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { expenseToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     if (showDatePicker) {
@@ -125,7 +176,7 @@ fun HomeScreen(
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
+                TextButton(onClick = {
                     val millis = datePickerState.selectedDateMillis
                     if (millis != null) {
                         val selected = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
@@ -137,7 +188,7 @@ fun HomeScreen(
                 }
             },
             dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { showDatePicker = false }) {
+                TextButton(onClick = { showDatePicker = false }) {
                     Text("Cancel")
                 }
             }
@@ -148,18 +199,36 @@ fun HomeScreen(
 }
 
 @Composable
-fun ExpenseListItem(expense: Expense) {
+fun ExpenseListItem(
+    expense: Expense,
+    onDeleteClick: () -> Unit
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(expense.description, fontWeight = FontWeight.Bold)
                 Text("${expense.date} • ${expense.timestamp}")
             }
-            Text("₹${"%.2f".format(expense.amount)}", fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "₹${"%.2f".format(expense.amount)}",
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                IconButton(onClick = onDeleteClick) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete expense",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
         }
     }
 }

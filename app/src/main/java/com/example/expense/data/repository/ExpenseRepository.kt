@@ -8,6 +8,7 @@ interface ExpenseRepository {
     fun observeExpensesByDate(date: String): Flow<List<Expense>>
     fun observeAllExpenses(): Flow<List<Expense>>
     suspend fun addExpense(expense: Expense): Long
+    suspend fun deleteExpense(expense: Expense)
     suspend fun clearAll()
 }
 
@@ -19,6 +20,8 @@ class ExpenseRepositoryImpl(
     override fun observeAllExpenses(): Flow<List<Expense>> = expenseDao.observeAllExpenses()
 
     override suspend fun addExpense(expense: Expense): Long = expenseDao.insertExpense(expense)
+
+    override suspend fun deleteExpense(expense: Expense) = expenseDao.deleteExpense(expense)
 
     override suspend fun clearAll() = expenseDao.clearAll()
 }

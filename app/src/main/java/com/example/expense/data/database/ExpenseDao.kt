@@ -1,6 +1,7 @@
 package com.example.expense.data.database
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -17,6 +18,9 @@ interface ExpenseDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExpense(expense: Expense): Long
+
+    @Delete
+    suspend fun deleteExpense(expense: Expense)
 
     @Query("DELETE FROM expenses")
     suspend fun clearAll()

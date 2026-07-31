@@ -27,17 +27,18 @@ class ExpenseViewModel(
     private val _uiState = MutableStateFlow(ExpenseUiState())
     val uiState: StateFlow<ExpenseUiState> = _uiState.asStateFlow()
 
+    private var lastDeletedExpense: Expense? = null
+
     init {
         observeSelectedDateExpenses()
     }
 
     private fun observeSelectedDateExpenses() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
             _uiState.collectLatest { currentState ->
                 repository.observeExpensesByDate(currentState.selectedDate).collect { expenses ->
                     val total = expenses.sumOf { it.amount }
-                    _uiState.value = currentState.copy(
+                    _uiState.value = _uiState.value.copy(
                         expenses = expenses,
                         totalAmount = total,
                         isLoading = false,
@@ -49,16 +50,7 @@ class ExpenseViewModel(
 
     fun selectDate(date: LocalDate) {
         val dateString = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-        _uiState.value = _uiState.value.copy(selectedDate = dateString)
-        viewModelScope.launch {
-            repository.observeExpensesByDate(dateString).collect { expenses ->
-                val total = expenses.sumOf { it.amount }
-                _uiState.value = _uiState.value.copy(
-                    expenses = expenses,
-                    totalAmount = total,
-                )
-            }
-        }
+        _uiState.value = _uiState.value.copy(selectedDate = dateString, isLoading = true)
     }
 
     fun addExpense(description: String, amount: String, date: String) {
@@ -72,12 +64,21 @@ class ExpenseViewModel(
         )
         viewModelScope.launch {
             repository.addExpense(expense)
-            repository.observeExpensesByDate(date).collect { expenses ->
-                val total = expenses.sumOf { it.amount }
-                _uiState.value = _uiState.value.copy(
-                    expenses = expenses,
-                    totalAmount = total,
-                )
+        }
+    }
+
+    fun deleteExpense(expense: Expense) {
+        lastDeletedExpense = expense
+        viewModelScope.launch {
+            repository.deleteExpense(expense)
+        }
+    }
+
+    fun restoreLastDeletedExpense() {
+        viewModelScope.launch {
+            lastDeletedExpense?.let {
+                repository.addExpense(it)
+                lastDeletedExpense = null
             }
         }
     }

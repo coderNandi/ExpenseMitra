@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -22,7 +24,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.expense.utils.ExpenseInputValidator
 import com.example.expense.viewmodel.ExpenseViewModel
@@ -43,6 +49,9 @@ fun AddExpenseScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     var descriptionError by remember { mutableStateOf<String?>(null) }
     var amountError by remember { mutableStateOf<String?>(null) }
+
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
     Scaffold { paddingValues ->
         Column(
@@ -66,10 +75,25 @@ fun AddExpenseScreen(
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
                 value = amount,
-                onValueChange = { amount = it; amountError = null },
+                onValueChange = { input ->
+                    // Only allow numeric input with at most one decimal point
+                    if (input.isEmpty() || (input.all { it.isDigit() || it == '.' } && input.count { it == '.' } <= 1)) {
+                        amount = input
+                        amountError = null
+                    }
+                },
                 label = { Text("Amount") },
+                placeholder = { Text("Enter amount") },
                 isError = amountError != null,
                 modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Decimal,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = { focusManager.clearFocus() }
+                ),
+                singleLine = true
             )
             if (amountError != null) {
                 Text(amountError.orEmpty(), color = MaterialTheme.colorScheme.error)
@@ -86,6 +110,7 @@ fun AddExpenseScreen(
                     amountError = validation.amountError
                     if (validation.isValid) {
                         viewModel.addExpense(description, amount, selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE))
+                        keyboardController?.hide()
                         onBack()
                     }
                 },
