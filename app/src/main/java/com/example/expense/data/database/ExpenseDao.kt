@@ -13,6 +13,9 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE date = :date ORDER BY timestamp DESC")
     fun observeExpensesByDate(date: String): Flow<List<Expense>>
 
+    @Query("SELECT SUM(amount) FROM expenses WHERE date LIKE :monthQuery || '%'")
+    fun observeMonthlyTotal(monthQuery: String): Flow<Double?>
+
     @Query("SELECT * FROM expenses ORDER BY timestamp DESC")
     fun observeAllExpenses(): Flow<List<Expense>>
 

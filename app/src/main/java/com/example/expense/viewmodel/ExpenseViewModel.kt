@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -17,6 +19,7 @@ data class ExpenseUiState(
     val selectedDate: String = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
     val expenses: List<Expense> = emptyList(),
     val totalAmount: Double = 0.0,
+    val monthlyTotalAmount: Double = 0.0,
     val isLoading: Boolean = false,
 )
 
@@ -35,16 +38,31 @@ class ExpenseViewModel(
 
     private fun observeSelectedDateExpenses() {
         viewModelScope.launch {
-            _uiState.collectLatest { currentState ->
-                repository.observeExpensesByDate(currentState.selectedDate).collect { expenses ->
-                    val total = expenses.sumOf { it.amount }
-                    _uiState.value = _uiState.value.copy(
-                        expenses = expenses,
-                        totalAmount = total,
-                        isLoading = false,
-                    )
+            _uiState
+                .map { it.selectedDate }
+                .distinctUntilChanged()
+                .collectLatest { selectedDate ->
+                    val monthQuery = selectedDate.substring(0, 7) // YYYY-MM
+                    
+                    launch {
+                        repository.observeExpensesByDate(selectedDate).collect { expenses ->
+                            val total = expenses.sumOf { it.amount }
+                            _uiState.value = _uiState.value.copy(
+                                expenses = expenses,
+                                totalAmount = total,
+                                isLoading = false,
+                            )
+                        }
+                    }
+                    
+                    launch {
+                        repository.observeMonthlyTotal(monthQuery).collect { monthlyTotal ->
+                            _uiState.value = _uiState.value.copy(
+                                monthlyTotalAmount = monthlyTotal
+                            )
+                        }
+                    }
                 }
-            }
         }
     }
 
